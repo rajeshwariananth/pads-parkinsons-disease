@@ -1,0 +1,7 @@
+table_name,grain,join_key,description
+patients.csv,One row per patient,patient_id,Patient-level demographics and clinical background.
+questionnaire_answers.csv,One row per patient per questionnaire question,patient_id,Long-format questionnaire answers for symptom analysis.
+questionnaire_summary.csv,One row per patient,patient_id,Questionnaire-level response totals and yes-answer rate.
+movement_sessions.csv,One row per patient per movement task,patient_id,Assessment session metadata including expected rows and device details.
+movement_records.csv,One row per patient per task per wrist file,patient_id,File manifest linking each task and wrist to the raw timeseries source.
+timeseries_summary.csv,One row per patient per task per wrist file,patient_id,Aggregated statistics from each raw sensor file for BI dashboards.
