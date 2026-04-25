@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PADS Parkinson's Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f2e9;
+      --paper: #fffdfa;
+      --ink: #14213d;
+      --muted: #5f6b7a;
+      --line: rgba(20, 33, 61, 0.12);
+      --accent: #b85c38;
+      --accent-deep: #7f2f17;
+      --teal: #2a9d8f;
+      --gold: #ddb15d;
+      --navy: #1f4e5f;
+      --rose: #d96c6c;
+      --shadow: 0 18px 45px rgba(20, 33, 61, 0.08);
+      --radius: 22px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(221, 177, 93, 0.18), transparent 30%),
+        radial-gradient(circle at top right, rgba(42, 157, 143, 0.12), transparent 28%),
+        linear-gradient(180deg, #fbf8f1 0%, #f3ede1 100%);
+      color: var(--ink);
+    }
+
+    .shell {
+      width: min(1440px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, rgba(31, 78, 95, 0.95), rgba(184, 92, 56, 0.9));
+      color: #fff;
+      border-radius: 30px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -40px -70px auto;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      letter-spacing: 0.02em;
+    }
+
+    .hero p {
+      max-width: 860px;
+      color: rgba(255, 255, 255, 0.88);
+      margin: 12px 0 0;
+      line-height: 1.55;
+    }
+
+    .server-note {
+      margin-top: 18px;
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      font-size: 0.92rem;
+    }
+
+    .tabs {
+      position: sticky;
+      top: 10px;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 10px;
+      margin: 22px 0;
+      padding: 12px;
+      background: rgba(255, 253, 250, 0.9);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(20, 33, 61, 0.08);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .tab-button {
+      border: 0;
+      background: #f2ece2;
+      color: var(--muted);
+      padding: 12px 10px;
+      border-radius: 14px;
+      cursor: pointer;
+      font-size: 0.92rem;
+      font-weight: 700;
+      transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
+    }
+
+    .tab-button.active,
+    .tab-button:hover {
+      background: linear-gradient(135deg, var(--ink), var(--navy));
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .panel {
+      display: none;
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+
+    .panel.active {
+      display: grid;
+    }
+
+    .section-card,
+    .chart-card,
+    .kpi-card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .section-card {
+      padding: 22px 22px 8px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 18px;
+    }
+
+    .section-header h2 {
+      margin: 0;
+      font-size: 1.55rem;
+    }
+
+    .section-header p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+      max-width: 880px;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .kpi-card {
+      padding: 18px;
+      min-height: 125px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: linear-gradient(180deg, #fffdfa 0%, #f7f1e7 100%);
+    }
+
+    .kpi-card .label {
+      color: var(--muted);
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .kpi-card .value {
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      font-weight: 800;
+      color: var(--accent-deep);
+      line-height: 1.05;
+    }
+
+    .kpi-card .hint {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .chart-grid.two {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .chart-grid.three {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .chart-card {
+      padding: 16px;
+      min-height: 420px;
+    }
+
+    .chart-card h3 {
+      margin: 0 0 4px;
+      font-size: 1.05rem;
+    }
+
+    .chart-subtitle {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    .plot {
+      width: 100%;
+      height: 330px;
+    }
+
+    .plot.tall {
+      height: 440px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .controls label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.88rem;
+      color: var(--muted);
+      min-width: 180px;
+    }
+
+    .controls select {
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .status {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(42, 157, 143, 0.1);
+      color: #1b635a;
+      border: 1px solid rgba(42, 157, 143, 0.18);
+      margin-bottom: 18px;
+    }
+
+    .status.error {
+      background: rgba(217, 108, 108, 0.12);
+      color: #8b3131;
+      border-color: rgba(217, 108, 108, 0.2);
+    }
+
+    .footer-note {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 1120px) {
+      .tabs {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .kpi-grid,
+      .chart-grid.two,
+      .chart-grid.three {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .shell {
+        width: min(100% - 20px, 100%);
+      }
+
+      .tabs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .hero {
+        padding: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <h1>PADS Smartwatch Dataset Dashboard</h1>
+      <p>
+        A browser-based dashboard for demographic, symptom, movement, sensor, tremor, wrist asymmetry, and correlation analysis.
+        The page joins the cleaned CSV tables in <code>pads_cleaned_csv</code> and uses task and wrist metadata for movement comparisons.
+      </p>
+      <div class="server-note">
+        Open with a local server, for example <code>python3 -m http.server</code>, then visit <code>http://localhost:8000</code>.
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs"></nav>
+    <div id="status" class="status">Loading CSV files and building charts...</div>
+
+    <section class="panel active" id="panel-demographics">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <h2>Demographics</h2>
+            <p>Patient profile overview built from the patient dimension table and grouped for Power BI and Tableau-style slicing.</p>
+          </div>
+        </div>
+        <div class="kpi-grid" id="demographics-kpis"></div>
+        <div class="chart-grid two">
+          <div class="chart-card"><h3>Age Distribution</h3><p class="chart-subtitle">Column chart showing the participant age profile.</p><div id="age-distribution" class="plot"></div></div>
+          <div class="chart-card"><h3>Gender Distribution</h3><p class="chart-subtitle">Pie chart of male versus female participants.</p><div id="gender-distribution" class="plot"></div></div>
+        </div>
+        <div class="chart-grid three">
+          <div class="chart-card"><h3>BMI Category Distribution</h3><p class="chart-subtitle">Donut chart based on height and weight from the patient table.</p><div id="bmi-distribution" class="plot"></div></div>
+          <div class="chart-card"><h3>Height vs Weight</h3><p class="chart-subtitle">Scatter plot for body composition patterns by patient group.</p><div id="height-weight" class="plot"></div></div>
+          <div class="chart-card"><h3>Patient Group Distribution</h3><p class="chart-subtitle">Bar chart of Parkinson’s Disease, Differential Diagnosis, and Healthy Control.</p><div id="patient-group-distribution" class="plot"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-clinical">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <h2>Clinical Symptoms Analysis</h2>
+            <p>Questionnaire answers and summaries joined on <code>patient_id</code> to explore symptom frequency, categories, and group-level patterns.</p>
+          </div>
+        </div>
+        <div class="chart-grid two">
+          <div class="chart-card"><h3>Non-Motor Symptoms Frequency</h3><p class="chart-subtitle">Counts of “yes” responses by symptom question.</p><div id="symptom-frequency" class="plot tall"></div></div>
+          <div class="chart-card"><h3>Symptom Category Distribution</h3><p class="chart-subtitle">Treemap using mapped symptom categories. “Other” captures remaining questions outside the requested buckets.</p><div id="symptom-category" class="plot tall"></div></div>
+        </div>
+        <div class="chart-grid two">
+          <div class="chart-card"><h3>Symptoms by Patient Group</h3><p class="chart-subtitle">Stacked bar chart of symptom categories across patient groups.</p><div id="symptoms-by-group" class="plot"></div></div>
+          <div class="chart-card"><h3>Top 10 Most Common Symptoms</h3><p class="chart-subtitle">Horizontal bar chart of the most frequently reported symptoms.</p><div id="top-symptoms" class="plot"></div></div>
+        </div>
+        <div class="chart-card">
+          <h3>Symptom Heatmap</h3>
+          <p class="chart-subtitle">Matrix heatmap of symptom frequency by patient group.</p>
+          <div id="symptom-heatmap" class="plot tall"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-movement">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <h2>Movement Task Analysis</h2>
+            <p>Movement sessions, records, and time-series summaries are joined by <code>patient_id</code>, with task and wrist splits preserved for comparison.</p>
+          </div>
+        </div>
+        <div class="chart-grid two">
+          <div class="chart-card"><h3>Task Frequency</h3><p class="chart-subtitle">Number of wrist recordings per task.</p><div id="task-frequency" class="plot"></div></div>
+          <div class="chart-card"><h3>Average Acceleration by Task</h3><p class="chart-subtitle">Clustered bar chart showing average acceleration range by task and wrist.</p><div id="avg-acceleration-task" class="plot"></div></div>
+        </div>
+        <div class="chart-grid two">
+          <div class="chart-card"><h3>Movement Intensity per Task</h3><p class="chart-subtitle">Box plot using acceleration range magnitude derived from summary files.</p><div id="movement-intensity-task" class="plot"></div></div>
+          <div class="chart-card"><h3>Task Duration Comparison</h3><p class="chart-subtitle">Average recording duration in seconds by task.</p><div id="task-duration" class="plot"></div></div>
+        </div>
+        <div class="chart-card">
+          <h3>Task vs Patient Group</h3>
+          <p class="chart-subtitle">Stacked column chart of movement tasks across patient groups.</p>
+          <div id="task-vs-group" class="plot tall"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-sensor">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <h2>Sensor Data Analysis</h2>
+            <p>The line charts use a selected raw sensor file referenced by <code>timeseries_summary.csv</code>. Aggregate views use summary metrics from the cleaned CSV tables.</p>
+          </div>
+        </div>
+        <div class="controls">
+          <label>Patient
+            <select id="sensor-patient"></select>
+          </label>
+          <label>Task
+            <select id="sensor-task"></select>
+          </label>
+          <label>Wrist
+            <select id="sensor-wrist"></select>
+          </label>
+        </div>
+        <div class="chart-grid two">
+          <div class="chart-card"><h3>Accelerometer Trend Over Time</h3><p class="chart-subtitle">Line chart of acceleration magnitude for the selected recording.</p><div id="accel-trend" class="plot"></div></div>
+          <div class="chart-card"><h3>Gyroscope Rotation Over Time</h3><p class="chart-subtitle">Line chart of gyroscope magnitude for the selected recording.</p><div id="gyro-trend" class="plot"></div></div>
+        </div>
+        <div class="chart-grid two">
+          <div class="chart-card"><h3>X vs Y vs Z Acceleration</h3><p class="chart-subtitle">Multi-line chart for the selected recording.</p><div id="xyz-acceleration" class="plot"></div></div>
+          <div class="chart-card"><h3>Signal Variance by Task</h3><p class="chart-subtitle">Column chart using a variance proxy built from summarized acceleration ranges.</p><div id="signal-variance-task" class="plot"></div></div>
+        </div>
+        <div class="chart-card">
+          <h3>Motion Energy Distribution</h3>
+          <p class="chart-subtitle">Histogram using a motion-energy proxy from aggregated acceleration and gyroscope ranges.</p>
+          <div id="motion-energy" class="plot"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-tremor">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <h2>Tremor Analysis</h2>
+            <p>Tremor metrics are derived from gyroscope summary ranges. Frequency is shown as a proxy because the cleaned CSV files do not store full spectral features.</p>
+          </div>
+        </div>
+        <div class="chart-grid two">
+          <div class="chart-card"><h3>Tremor Intensity by Patient Group</h3><p class="chart-subtitle">Box plot of average gyroscope range magnitude per patient.</p><div id="tremor-intensity-group" class="plot"></div></div>
+          <div class="chart-card"><h3>Tremor Frequency Distribution</h3><p class="chart-subtitle">Histogram of a tremor-frequency proxy based on intensity relative to recording duration.</p><div id="tremor-frequency" class="plot"></div></div>
+        </div>
+        <div class="chart-grid two">
+          <div class="chart-card"><h3>Tremor vs Age</h3><p class="chart-subtitle">Scatter plot of patient age versus average tremor intensity.</p><div id="tremor-vs-age" class="plot"></div></div>
+          <div class="chart-card"><h3>Tremor by Task Type</h3><p class="chart-subtitle">Average tremor intensity across movement tasks.</p><div id="tremor-by-task" class="plot"></div></div>
+        </div>
+        <div class="chart-card">
+          <h3>Tremor Severity Categories</h3>
+          <p class="chart-subtitle">Donut chart based on quartiles of patient-level tremor intensity.</p>
+          <div id="tremor-severity" class="plot"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-wrist">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <h2>Left vs Right Wrist Comparison</h2>
+            <p>Each task includes two wrist recordings, making it possible to compare acceleration, movement intensity, and tremor asymmetry directly.</p>
+          </div>
+        </div>
+        <div class="chart-grid two">
+          <div class="chart-card"><h3>Left vs Right Acceleration</h3><p class="chart-subtitle">Scatter plot comparing left and right acceleration range per patient-task pair.</p><div id="left-right-accel" class="plot"></div></div>
+          <div class="chart-card"><h3>Average Movement by Wrist</h3><p class="chart-subtitle">Clustered bar chart of average motion energy by task and wrist.</p><div id="movement-by-wrist" class="plot"></div></div>
+        </div>
+        <div class="chart-card">
+          <h3>Tremor Asymmetry</h3>
+          <p class="chart-subtitle">Diverging bar chart of average right-minus-left tremor intensity by task.</p>
+          <div id="tremor-asymmetry" class="plot"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-correlation">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <h2>Correlation & Pattern Analysis</h2>
+            <p>Patient-level aggregates combine demographics with movement and tremor proxies to surface broad relationships across the cohort.</p>
+          </div>
+        </div>
+        <div class="chart-grid two">
+          <div class="chart-card"><h3>Correlation Matrix</h3><p class="chart-subtitle">Heatmap of age, BMI, tremor amplitude, and movement variance.</p><div id="correlation-matrix" class="plot"></div></div>
+          <div class="chart-card"><h3>BMI vs Movement Speed</h3><p class="chart-subtitle">Scatter plot using a movement-speed proxy from summarized acceleration range over duration.</p><div id="bmi-vs-speed" class="plot"></div></div>
+        </div>
+        <p class="footer-note">
+          Note: Tremor amplitude, movement variance, and movement speed are derived from file-level sensor summaries rather than full raw-signal feature engineering.
+        </p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const TAB_CONFIG = [
+      { id: "demographics", label: "TAB1 Demographics" },
+      { id: "clinical", label: "TAB2 Clinical" },
+      { id: "movement", label: "TAB3 Movement" },
+      { id: "sensor", label: "TAB4 Sensor" },
+      { id: "tremor", label: "TAB5 Tremor" },
+      { id: "wrist", label: "TAB6 Wrist" },
+      { id: "correlation", label: "TAB7 Correlation" }
+    ];
+
+    const GROUP_ORDER = ["Parkinson’s Disease", "Differential Diagnosis", "Healthy Control"];
+    const WRIST_ORDER = ["LeftWrist", "RightWrist"];
+    const palette = {
+      pd: "#b85c38",
+      diff: "#ddb15d",
+      healthy: "#2a9d8f",
+      ink: "#14213d",
+      navy: "#1f4e5f",
+      rose: "#d96c6c",
+      sand: "#efe6d8",
+      lavender: "#8d99ae"
+    };
+
+    const statusEl = document.getElementById("status");
+
+    buildTabs();
+    loadDashboard().catch((error) => {
+      console.error(error);
+      setStatus("Unable to load the dashboard data. Make sure you are serving this folder over HTTP and that the CSV files are available in pads_cleaned_csv.", true);
+    });
+
+    async function loadDashboard() {
+      const [patients, questionnaireAnswers, questionnaireSummary, movementSessions, movementRecords, timeseriesSummary] = await Promise.all([
+        loadCsv("pads_cleaned_csv/patients.csv", parsePatient),
+        loadCsv("pads_cleaned_csv/questionnaire_answers.csv", parseQuestionnaireAnswer),
+        loadCsv("pads_cleaned_csv/questionnaire_summary.csv", parseQuestionnaireSummary),
+        loadCsv("pads_cleaned_csv/movement_sessions.csv", parseMovementSession),
+        loadCsv("pads_cleaned_csv/movement_records.csv", parseMovementRecord),
+        loadCsv("pads_cleaned_csv/timeseries_summary.csv", parseTimeseriesSummary)
+      ]);
+
+      const patientMap = new Map(patients.map((row) => [row.patient_id, row]));
+      const summaryMap = new Map(questionnaireSummary.map((row) => [row.patient_id, row]));
+      questionnaireAnswers.forEach((row) => {
+        row.patient = patientMap.get(row.patient_id);
+        row.summary = summaryMap.get(row.patient_id);
+        row.patient_group = row.patient ? row.patient.patient_group : "Unknown";
+        row.symptom_category = classifySymptomCategory(row.question_id, row.question_text);
+      });
+
+      movementSessions.forEach((row) => {
+        row.patient = patientMap.get(row.patient_id);
+        row.patient_group = row.patient ? row.patient.patient_group : "Unknown";
+      });
+
+      movementRecords.forEach((row) => {
+        row.patient = patientMap.get(row.patient_id);
+        row.patient_group = row.patient ? row.patient.patient_group : "Unknown";
+      });
+
+      timeseriesSummary.forEach((row) => {
+        row.patient = patientMap.get(row.patient_id);
+        row.patient_group = row.patient ? row.patient.patient_group : "Unknown";
+        row.accel_range_x = row.accelerometer_x_max - row.accelerometer_x_min;
+        row.accel_range_y = row.accelerometer_y_max - row.accelerometer_y_min;
+        row.accel_range_z = row.accelerometer_z_max - row.accelerometer_z_min;
+        row.gyro_range_x = row.gyroscope_x_max - row.gyroscope_x_min;
+        row.gyro_range_y = row.gyroscope_y_max - row.gyroscope_y_min;
+        row.gyro_range_z = row.gyroscope_z_max - row.gyroscope_z_min;
+        row.accel_range_mean = average([row.accel_range_x, row.accel_range_y, row.accel_range_z]);
+        row.gyro_range_mean = average([row.gyro_range_x, row.gyro_range_y, row.gyro_range_z]);
+        row.accel_vector_range = Math.sqrt(row.accel_range_x ** 2 + row.accel_range_y ** 2 + row.accel_range_z ** 2);
+        row.gyro_vector_range = Math.sqrt(row.gyro_range_x ** 2 + row.gyro_range_y ** 2 + row.gyro_range_z ** 2);
+        row.motion_intensity = row.accel_vector_range;
+        row.motion_energy = row.accel_vector_range + 0.1 * row.gyro_vector_range;
+        row.movement_variance_proxy = average([
+          row.accel_range_x ** 2,
+          row.accel_range_y ** 2,
+          row.accel_range_z ** 2
+        ]);
+        row.tremor_intensity = row.gyro_vector_range;
+        row.tremor_frequency_proxy = row.duration_seconds ? row.gyro_vector_range / row.duration_seconds : 0;
+        row.movement_speed_proxy = row.duration_seconds ? row.accel_vector_range / row.duration_seconds : 0;
+      });
+
+      const patientAggregates = buildPatientAggregates(patients, timeseriesSummary, questionnaireAnswers);
+      const sensorLookup = new Map(timeseriesSummary.map((row) => [`${row.patient_id}|${row.task_name}|${row.device_location}`, row]));
+
+      renderDemographics(patients);
+      renderClinical(questionnaireAnswers);
+      renderMovement(movementSessions, timeseriesSummary);
+      renderSensor(timeseriesSummary, sensorLookup, patientMap);
+      renderTremor(timeseriesSummary, patientAggregates);
+      renderWrist(timeseriesSummary);
+      renderCorrelation(patientAggregates);
+
+      setStatus("Dashboard ready. Explore each tab above to review demographics, symptoms, movement patterns, sensors, tremor, wrist asymmetry, and correlations.");
+    }
+
+    function buildTabs() {
+      const tabsEl = document.getElementById("tabs");
+      TAB_CONFIG.forEach((tab, index) => {
+        const button = document.createElement("button");
+        button.className = `tab-button${index === 0 ? " active" : ""}`;
+        button.textContent = tab.label;
+        button.dataset.target = tab.id;
+        button.addEventListener("click", () => activateTab(tab.id));
+        tabsEl.appendChild(button);
+      });
+    }
+
+    function activateTab(id) {
+      document.querySelectorAll(".tab-button").forEach((button) => {
+        button.classList.toggle("active", button.dataset.target === id);
+      });
+      document.querySelectorAll(".panel").forEach((panel) => {
+        panel.classList.toggle("active", panel.id === `panel-${id}`);
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    async function loadCsv(path, rowParser) {
+      return d3.csv(path, rowParser);
+    }
+
+    function parsePatient(row) {
+      const currentAge = numberOrNull(row.current_age);
+      const ageAtDiagnosis = numberOrNull(row.age_at_diagnosis);
+      const heightCm = numberOrNull(row.height_cm);
+      const weightKg = numberOrNull(row.weight_kg);
+      const bmi = heightCm && weightKg ? weightKg / ((heightCm / 100) ** 2) : null;
+      return {
+        ...row,
+        current_age: currentAge,
+        age_at_diagnosis: ageAtDiagnosis,
+        height_cm: heightCm,
+        weight_kg: weightKg,
+        bmi,
+        bmi_category: classifyBmi(bmi),
+        disease_duration: currentAge && ageAtDiagnosis ? currentAge - ageAtDiagnosis : null,
+        patient_group: mapPatientGroup(row.condition)
+      };
+    }
+
+    function parseQuestionnaireAnswer(row) {
+      return {
+        ...row,
+        answer_flag: +row.answer_flag
+      };
+    }
+
+    function parseQuestionnaireSummary(row) {
+      return {
+        ...row,
+        total_questions: +row.total_questions,
+        yes_answers: +row.yes_answers,
+        yes_answer_rate: +row.yes_answer_rate
+      };
+    }
+
+    function parseMovementSession(row) {
+      return {
+        ...row,
+        sampling_rate_hz: +row.sampling_rate_hz,
+        bits: +row.bits,
+        expected_rows_per_record: +row.expected_rows_per_record,
+        record_count: +row.record_count
+      };
+    }
+
+    function parseMovementRecord(row) {
+      return row;
+    }
+
+    function parseTimeseriesSummary(row) {
+      const numericKeys = [
+        "row_count", "time_start", "time_end", "duration_seconds",
+        "accelerometer_x_mean", "accelerometer_x_min", "accelerometer_x_max",
+        "accelerometer_y_mean", "accelerometer_y_min", "accelerometer_y_max",
+        "accelerometer_z_mean", "accelerometer_z_min", "accelerometer_z_max",
+        "gyroscope_x_mean", "gyroscope_x_min", "gyroscope_x_max",
+        "gyroscope_y_mean", "gyroscope_y_min", "gyroscope_y_max",
+        "gyroscope_z_mean", "gyroscope_z_min", "gyroscope_z_max"
+      ];
+      numericKeys.forEach((key) => {
+        row[key] = +row[key];
+      });
+      return row;
+    }
+
+    function numberOrNull(value) {
+      const numeric = +value;
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    function mapPatientGroup(condition) {
+      if (condition === "Healthy") return "Healthy Control";
+      if (condition === "Parkinson's") return "Parkinson’s Disease";
+      return "Differential Diagnosis";
+    }
+
+    function classifyBmi(bmi) {
+      if (bmi == null) return "Unknown";
+      if (bmi < 18.5) return "Underweight";
+      if (bmi < 25) return "Normal";
+      if (bmi < 30) return "Overweight";
+      return "Obese";
+    }
+
+    function classifySymptomCategory(questionId, questionText) {
+      const sleep = new Set(["22", "23", "24", "25", "26"]);
+      const gastrointestinal = new Set(["01", "03", "04", "05", "06", "07", "08", "09"]);
+      const mood = new Set(["13", "16", "17", "18", "19"]);
+      const cognitive = new Set(["12", "14", "15", "30"]);
+      const normalizedId = String(questionId).padStart(2, "0");
+      if (sleep.has(normalizedId)) return "Sleep";
+      if (gastrointestinal.has(normalizedId)) return "Gastrointestinal";
+      if (mood.has(normalizedId)) return "Mood";
+      if (cognitive.has(normalizedId)) return "Cognitive";
+
+      const text = questionText.toLowerCase();
+      if (text.includes("sleep") || text.includes("dream")) return "Sleep";
+      if (text.includes("bowel") || text.includes("swallow") || text.includes("constipation") || text.includes("urine")) return "Gastrointestinal";
+      if (text.includes("sad") || text.includes("anxious") || text.includes("interest")) return "Mood";
+      if (text.includes("remember") || text.includes("concentrating") || text.includes("believing") || text.includes("hearing")) return "Cognitive";
+      return "Other";
+    }
+
+    function average(values) {
+      const valid = values.filter((value) => Number.isFinite(value));
+      return valid.length ? d3.mean(valid) : 0;
+    }
+
+    function sumBy(values, accessor) {
+      return d3.sum(values, accessor);
+    }
+
+    function buildPatientAggregates(patients, timeseriesSummary, questionnaireAnswers) {
+      const byPatient = d3.group(timeseriesSummary, (d) => d.patient_id);
+      const answersByPatient = d3.group(questionnaireAnswers.filter((d) => d.answer_flag === 1), (d) => d.patient_id);
+      return patients.map((patient) => {
+        const sensorRows = byPatient.get(patient.patient_id) || [];
+        const positiveAnswers = answersByPatient.get(patient.patient_id) || [];
+        return {
+          patient_id: patient.patient_id,
+          patient_group: patient.patient_group,
+          condition: patient.condition,
+          age: patient.current_age,
+          bmi: patient.bmi,
+          tremor_amplitude: average(sensorRows.map((row) => row.tremor_intensity)),
+          tremor_frequency_proxy: average(sensorRows.map((row) => row.tremor_frequency_proxy)),
+          movement_variance: average(sensorRows.map((row) => row.movement_variance_proxy)),
+          movement_speed: average(sensorRows.map((row) => row.movement_speed_proxy)),
+          symptom_count: positiveAnswers.length
+        };
+      });
+    }
+
+    function renderDemographics(patients) {
+      const kpis = [
+        { label: "Total Patients", value: patients.length, hint: "All participants in the cleaned patient table." },
+        { label: "Parkinson's Patients", value: patients.filter((d) => d.condition === "Parkinson's").length, hint: "Exact Parkinson's diagnosis only." },
+        { label: "Healthy Patients", value: patients.filter((d) => d.condition === "Healthy").length, hint: "Healthy control participants." },
+        { label: "Average Age at Diagnosis", value: formatNumber(d3.mean(patients.filter((d) => d.age_at_diagnosis != null), (d) => d.age_at_diagnosis), 1), hint: "Across patients with a recorded diagnosis age." },
+        { label: "Ave Disease Duration", value: formatNumber(d3.mean(patients.filter((d) => d.disease_duration != null && d.condition !== "Healthy"), (d) => d.disease_duration), 1), hint: "Current age minus age at diagnosis." }
+      ];
+
+      const kpiEl = document.getElementById("demographics-kpis");
+      kpiEl.innerHTML = "";
+      kpis.forEach((kpi) => {
+        const card = document.createElement("div");
+        card.className = "kpi-card";
+        card.innerHTML = `<div class="label">${kpi.label}</div><div class="value">${kpi.value}</div><div class="hint">${kpi.hint}</div>`;
+        kpiEl.appendChild(card);
+      });
+
+      const ageBins = buildAgeBins(patients.map((d) => d.current_age).filter(Boolean));
+      drawPlot("age-distribution", [{
+        type: "bar",
+        x: ageBins.map((d) => d.label),
+        y: ageBins.map((d) => d.count),
+        marker: { color: palette.accent }
+      }], baseLayout({ yaxisTitle: "Patients", xaxisTitle: "Age Group" }));
+
+      const genderCounts = Array.from(d3.rollup(patients, (v) => v.length, (d) => capitalize(d.gender)), ([label, value]) => ({ label, value }));
+      drawPlot("gender-distribution", [{
+        type: "pie",
+        labels: genderCounts.map((d) => d.label),
+        values: genderCounts.map((d) => d.value),
+        hole: 0,
+        marker: { colors: [palette.navy, palette.rose] },
+        textinfo: "label+percent"
+      }], baseLayout({ showlegend: true }));
+
+      const bmiOrder = ["Underweight", "Normal", "Overweight", "Obese"];
+      const bmiCounts = bmiOrder.map((label) => patients.filter((d) => d.bmi_category === label).length);
+      drawPlot("bmi-distribution", [{
+        type: "pie",
+        labels: bmiOrder,
+        values: bmiCounts,
+        hole: 0.5,
+        marker: { colors: ["#6baed6", "#2a9d8f", "#ddb15d", "#d96c6c"] },
+        textinfo: "label+percent"
+      }], baseLayout({ showlegend: true }));
+
+      const scatterTraces = GROUP_ORDER.map((group) => ({
+        type: "scatter",
+        mode: "markers",
+        name: group,
+        x: patients.filter((d) => d.patient_group === group).map((d) => d.height_cm),
+        y: patients.filter((d) => d.patient_group === group).map((d) => d.weight_kg),
+        text: patients.filter((d) => d.patient_group === group).map((d) => `Patient ${d.patient_id}`),
+        marker: {
+          size: 9,
+          opacity: 0.75,
+          color: groupColor(group)
+        }
+      }));
+      drawPlot("height-weight", scatterTraces, baseLayout({ xaxisTitle: "Height (cm)", yaxisTitle: "Weight (kg)" }));
+
+      drawPlot("patient-group-distribution", [{
+        type: "bar",
+        x: GROUP_ORDER,
+        y: GROUP_ORDER.map((group) => patients.filter((d) => d.patient_group === group).length),
+        marker: { color: GROUP_ORDER.map(groupColor) }
+      }], baseLayout({ yaxisTitle: "Patients" }));
+    }
+
+    function renderClinical(questionnaireAnswers) {
+      const positiveAnswers = questionnaireAnswers.filter((d) => d.answer_flag === 1);
+      const symptomCounts = Array.from(
+        d3.rollup(positiveAnswers, (v) => v.length, (d) => d.question_text),
+        ([question_text, count]) => ({ question_text, count })
+      ).sort((a, b) => d3.descending(a.count, b.count));
+
+      drawPlot("symptom-frequency", [{
+        type: "bar",
+        x: symptomCounts.map((d) => d.question_text),
+        y: symptomCounts.map((d) => d.count),
+        marker: { color: palette.navy }
+      }], baseLayout({
+        yaxisTitle: "Yes Responses",
+        xaxis: { tickangle: -45, automargin: true }
+      }));
+
+      const categoryCounts = Array.from(
+        d3.rollup(positiveAnswers, (v) => v.length, (d) => d.symptom_category),
+        ([category, count]) => ({ category, count })
+      ).sort((a, b) => d3.descending(a.count, b.count));
+      drawPlot("symptom-category", [{
+        type: "treemap",
+        labels: categoryCounts.map((d) => d.category),
+        parents: categoryCounts.map(() => "Symptoms"),
+        values: categoryCounts.map((d) => d.count),
+        marker: { colors: ["#2a9d8f", "#ddb15d", "#b85c38", "#8d99ae", "#d96c6c"] }
+      }], baseLayout({ margin: { l: 10, r: 10, t: 10, b: 10 } }));
+
+      const categories = Array.from(new Set(positiveAnswers.map((d) => d.symptom_category)));
+      const symptomByGroupTraces = categories.map((category) => ({
+        type: "bar",
+        name: category,
+        x: GROUP_ORDER,
+        y: GROUP_ORDER.map((group) =>
+          positiveAnswers.filter((d) => d.patient_group === group && d.symptom_category === category).length
+        )
+      }));
+      drawPlot("symptoms-by-group", symptomByGroupTraces, baseLayout({
+        barmode: "stack",
+        yaxisTitle: "Yes Responses"
+      }));
+
+      const top10 = symptomCounts.slice(0, 10).reverse();
+      drawPlot("top-symptoms", [{
+        type: "bar",
+        orientation: "h",
+        x: top10.map((d) => d.count),
+        y: top10.map((d) => d.question_text),
+        marker: { color: palette.accent }
+      }], baseLayout({ xaxisTitle: "Yes Responses" }));
+
+      const symptomRows = Array.from(new Set(questionnaireAnswers.map((d) => d.question_text)));
+      const heatmapMatrix = symptomRows.map((symptom) => (
+        GROUP_ORDER.map((group) =>
+          positiveAnswers.filter((d) => d.question_text === symptom && d.patient_group === group).length
+        )
+      ));
+      drawPlot("symptom-heatmap", [{
+        type: "heatmap",
+        x: GROUP_ORDER,
+        y: symptomRows,
+        z: heatmapMatrix,
+        colorscale: [["0", "#f5efe2"], ["0.5", "#ddb15d"], ["1", "#b85c38"]]
+      }], baseLayout({ margin: { l: 230, r: 30, t: 20, b: 70 } }));
+    }
+
+    function renderMovement(movementSessions, timeseriesSummary) {
+      const taskFrequency = Array.from(d3.rollup(timeseriesSummary, (v) => v.length, (d) => d.task_name), ([task, count]) => ({ task, count }));
+      drawPlot("task-frequency", [{
+        type: "bar",
+        x: taskFrequency.map((d) => d.task),
+        y: taskFrequency.map((d) => d.count),
+        marker: { color: palette.teal }
+      }], baseLayout({ yaxisTitle: "Recordings", xaxis: { tickangle: -30 } }));
+
+      const accelByTaskWrist = WRIST_ORDER.map((wrist) => ({
+        type: "bar",
+        name: wrist,
+        x: uniqueSorted(timeseriesSummary.map((d) => d.task_name)),
+        y: uniqueSorted(timeseriesSummary.map((d) => d.task_name)).map((task) =>
+          average(timeseriesSummary.filter((d) => d.task_name === task && d.device_location === wrist).map((d) => d.accel_range_mean))
+        )
+      }));
+      drawPlot("avg-acceleration-task", accelByTaskWrist, baseLayout({
+        barmode: "group",
+        yaxisTitle: "Average Acceleration Range",
+        xaxis: { tickangle: -30 }
+      }));
+
+      const taskNames = uniqueSorted(timeseriesSummary.map((d) => d.task_name));
+      const boxTraces = taskNames.map((task) => ({
+        type: "box",
+        name: task,
+        y: timeseriesSummary.filter((d) => d.task_name === task).map((d) => d.motion_intensity),
+        marker: { color: palette.accent },
+        boxmean: true
+      }));
+      drawPlot("movement-intensity-task", boxTraces, baseLayout({ yaxisTitle: "Movement Intensity" }));
+
+      drawPlot("task-duration", [{
+        type: "bar",
+        x: taskNames,
+        y: taskNames.map((task) =>
+          average(timeseriesSummary.filter((d) => d.task_name === task).map((d) => d.duration_seconds))
+        ),
+        marker: { color: palette.gold }
+      }], baseLayout({ yaxisTitle: "Average Duration (s)", xaxis: { tickangle: -30 } }));
+
+      const taskVsGroupTraces = GROUP_ORDER.map((group) => ({
+        type: "bar",
+        name: group,
+        x: taskNames,
+        y: taskNames.map((task) => movementSessions.filter((d) => d.task_name === task && d.patient_group === group).length),
+        marker: { color: groupColor(group) }
+      }));
+      drawPlot("task-vs-group", taskVsGroupTraces, baseLayout({
+        barmode: "stack",
+        yaxisTitle: "Session Rows",
+        xaxis: { tickangle: -30 }
+      }));
+    }
+
+    function renderSensor(timeseriesSummary, sensorLookup, patientMap) {
+      const patientSelect = document.getElementById("sensor-patient");
+      const taskSelect = document.getElementById("sensor-task");
+      const wristSelect = document.getElementById("sensor-wrist");
+
+      const patientOptions = patientsSortedForSelect(timeseriesSummary, patientMap);
+      patientOptions.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = item.patient_id;
+        option.textContent = `${item.patient_id} • ${item.group}`;
+        patientSelect.appendChild(option);
+      });
+
+      uniqueSorted(timeseriesSummary.map((d) => d.task_name)).forEach((task) => {
+        const option = document.createElement("option");
+        option.value = task;
+        option.textContent = task;
+        taskSelect.appendChild(option);
+      });
+
+      WRIST_ORDER.forEach((wrist) => {
+        const option = document.createElement("option");
+        option.value = wrist;
+        option.textContent = wrist;
+        wristSelect.appendChild(option);
+      });
+
+      const defaultRecord = timeseriesSummary.find((d) => d.patient_group === "Parkinson’s Disease" && d.task_name === "Relaxed" && d.device_location === "RightWrist") || timeseriesSummary[0];
+      patientSelect.value = defaultRecord.patient_id;
+      taskSelect.value = defaultRecord.task_name;
+      wristSelect.value = defaultRecord.device_location;
+
+      const updateRawCharts = async () => {
+        const key = `${patientSelect.value}|${taskSelect.value}|${wristSelect.value}`;
+        const row = sensorLookup.get(key);
+        if (!row) return;
+        const path = `pads-parkinsons-disease-smartwatch-dataset/${row.file_name}`;
+        const signal = await loadRawSignal(path);
+        drawPlot("accel-trend", [{
+          type: "scatter",
+          mode: "lines",
+          x: signal.time,
+          y: signal.accelMagnitude,
+          line: { color: palette.accent, width: 2 }
+        }], baseLayout({ xaxisTitle: "Time (s)", yaxisTitle: "Acceleration Magnitude" }));
+
+        drawPlot("gyro-trend", [{
+          type: "scatter",
+          mode: "lines",
+          x: signal.time,
+          y: signal.gyroMagnitude,
+          line: { color: palette.navy, width: 2 }
+        }], baseLayout({ xaxisTitle: "Time (s)", yaxisTitle: "Gyroscope Magnitude" }));
+
+        drawPlot("xyz-acceleration", [
+          { type: "scatter", mode: "lines", name: "X", x: signal.time, y: signal.ax, line: { color: palette.accent } },
+          { type: "scatter", mode: "lines", name: "Y", x: signal.time, y: signal.ay, line: { color: palette.teal } },
+          { type: "scatter", mode: "lines", name: "Z", x: signal.time, y: signal.az, line: { color: palette.gold } }
+        ], baseLayout({ xaxisTitle: "Time (s)", yaxisTitle: "Acceleration" }));
+      };
+
+      patientSelect.addEventListener("change", updateRawCharts);
+      taskSelect.addEventListener("change", updateRawCharts);
+      wristSelect.addEventListener("change", updateRawCharts);
+
+      const taskNames = uniqueSorted(timeseriesSummary.map((d) => d.task_name));
+      drawPlot("signal-variance-task", [{
+        type: "bar",
+        x: taskNames,
+        y: taskNames.map((task) =>
+          average(timeseriesSummary.filter((d) => d.task_name === task).map((d) => d.movement_variance_proxy))
+        ),
+        marker: { color: palette.rose }
+      }], baseLayout({ yaxisTitle: "Variance Proxy", xaxis: { tickangle: -30 } }));
+
+      drawPlot("motion-energy", [{
+        type: "histogram",
+        x: timeseriesSummary.map((d) => d.motion_energy),
+        marker: { color: palette.teal },
+        nbinsx: 30
+      }], baseLayout({ xaxisTitle: "Motion Energy Proxy", yaxisTitle: "Recordings" }));
+
+      updateRawCharts();
+    }
+
+    async function loadRawSignal(path) {
+      const text = await d3.text(path);
+      const rows = text.trim().split(/\r?\n/).map((line) => line.split(",").map(Number)).filter((values) => values.length === 7);
+      return {
+        time: rows.map((d) => d[0]),
+        ax: rows.map((d) => d[1]),
+        ay: rows.map((d) => d[2]),
+        az: rows.map((d) => d[3]),
+        accelMagnitude: rows.map((d) => Math.sqrt(d[1] ** 2 + d[2] ** 2 + d[3] ** 2)),
+        gyroMagnitude: rows.map((d) => Math.sqrt(d[4] ** 2 + d[5] ** 2 + d[6] ** 2))
+      };
+    }
+
+    function renderTremor(timeseriesSummary, patientAggregates) {
+      const groupTraces = GROUP_ORDER.map((group) => ({
+        type: "box",
+        name: group,
+        y: patientAggregates.filter((d) => d.patient_group === group).map((d) => d.tremor_amplitude),
+        marker: { color: groupColor(group) },
+        boxmean: true
+      }));
+      drawPlot("tremor-intensity-group", groupTraces, baseLayout({ yaxisTitle: "Tremor Intensity" }));
+
+      drawPlot("tremor-frequency", [{
+        type: "histogram",
+        x: patientAggregates.map((d) => d.tremor_frequency_proxy),
+        marker: { color: palette.gold },
+        nbinsx: 28
+      }], baseLayout({ xaxisTitle: "Tremor Frequency Proxy", yaxisTitle: "Patients" }));
+
+      const scatterTraces = GROUP_ORDER.map((group) => ({
+        type: "scatter",
+        mode: "markers",
+        name: group,
+        x: patientAggregates.filter((d) => d.patient_group === group).map((d) => d.age),
+        y: patientAggregates.filter((d) => d.patient_group === group).map((d) => d.tremor_amplitude),
+        marker: { size: 9, color: groupColor(group), opacity: 0.72 }
+      }));
+      drawPlot("tremor-vs-age", scatterTraces, baseLayout({ xaxisTitle: "Age", yaxisTitle: "Tremor Intensity" }));
+
+      const taskNames = uniqueSorted(timeseriesSummary.map((d) => d.task_name));
+      drawPlot("tremor-by-task", [{
+        type: "bar",
+        x: taskNames,
+        y: taskNames.map((task) =>
+          average(timeseriesSummary.filter((d) => d.task_name === task).map((d) => d.tremor_intensity))
+        ),
+        marker: { color: palette.accent }
+      }], baseLayout({ yaxisTitle: "Average Tremor Intensity", xaxis: { tickangle: -30 } }));
+
+      const severity = classifySeverity(patientAggregates.map((d) => d.tremor_amplitude));
+      drawPlot("tremor-severity", [{
+        type: "pie",
+        labels: severity.labels,
+        values: severity.values,
+        hole: 0.55,
+        marker: { colors: ["#8ecae6", "#2a9d8f", "#ddb15d", "#b85c38"] },
+        textinfo: "label+percent"
+      }], baseLayout({ showlegend: true }));
+    }
+
+    function renderWrist(timeseriesSummary) {
+      const pairs = buildLeftRightPairs(timeseriesSummary);
+      drawPlot("left-right-accel", [{
+        type: "scatter",
+        mode: "markers",
+        x: pairs.map((d) => d.left.accel_range_mean),
+        y: pairs.map((d) => d.right.accel_range_mean),
+        text: pairs.map((d) => `${d.patient_id} • ${d.task_name}`),
+        marker: {
+          size: 8,
+          color: pairs.map((d) => groupColor(d.patient_group)),
+          opacity: 0.65
+        }
+      }], baseLayout({ xaxisTitle: "Left Wrist Acceleration", yaxisTitle: "Right Wrist Acceleration" }));
+
+      const taskNames = uniqueSorted(timeseriesSummary.map((d) => d.task_name));
+      const movementByWristTraces = WRIST_ORDER.map((wrist) => ({
+        type: "bar",
+        name: wrist,
+        x: taskNames,
+        y: taskNames.map((task) =>
+          average(timeseriesSummary.filter((d) => d.task_name === task && d.device_location === wrist).map((d) => d.motion_energy))
+        )
+      }));
+      drawPlot("movement-by-wrist", movementByWristTraces, baseLayout({
+        barmode: "group",
+        yaxisTitle: "Motion Energy Proxy",
+        xaxis: { tickangle: -30 }
+      }));
+
+      const asymmetry = taskNames.map((task) => {
+        const taskPairs = pairs.filter((d) => d.task_name === task);
+        return {
+          task,
+          value: average(taskPairs.map((d) => d.right.tremor_intensity - d.left.tremor_intensity))
+        };
+      });
+      drawPlot("tremor-asymmetry", [{
+        type: "bar",
+        orientation: "h",
+        x: asymmetry.map((d) => d.value),
+        y: asymmetry.map((d) => d.task),
+        marker: {
+          color: asymmetry.map((d) => d.value >= 0 ? palette.accent : palette.teal)
+        }
+      }], baseLayout({ xaxisTitle: "Right Minus Left Tremor Intensity", yaxisTitle: "Task" }));
+    }
+
+    function renderCorrelation(patientAggregates) {
+      const metrics = [
+        { label: "Age", key: "age" },
+        { label: "BMI", key: "bmi" },
+        { label: "Tremor amplitude", key: "tremor_amplitude" },
+        { label: "Movement variance", key: "movement_variance" }
+      ];
+      const matrix = metrics.map((a) => metrics.map((b) =>
+        pearson(patientAggregates.map((row) => row[a.key]), patientAggregates.map((row) => row[b.key]))
+      ));
+      drawPlot("correlation-matrix", [{
+        type: "heatmap",
+        x: metrics.map((m) => m.label),
+        y: metrics.map((m) => m.label),
+        z: matrix,
+        zmin: -1,
+        zmax: 1,
+        colorscale: [
+          [0, "#1f4e5f"],
+          [0.5, "#f4eee4"],
+          [1, "#b85c38"]
+        ]
+      }], baseLayout({}));
+
+      const scatterTraces = GROUP_ORDER.map((group) => ({
+        type: "scatter",
+        mode: "markers",
+        name: group,
+        x: patientAggregates.filter((d) => d.patient_group === group).map((d) => d.bmi),
+        y: patientAggregates.filter((d) => d.patient_group === group).map((d) => d.movement_speed),
+        marker: { size: 9, color: groupColor(group), opacity: 0.74 }
+      }));
+      drawPlot("bmi-vs-speed", scatterTraces, baseLayout({ xaxisTitle: "BMI", yaxisTitle: "Movement Speed Proxy" }));
+    }
+
+    function buildAgeBins(ages) {
+      const bins = [];
+      for (let start = 20; start <= 90; start += 10) {
+        const end = start + 9;
+        bins.push({
+          label: `${start}-${end}`,
+          count: ages.filter((age) => age >= start && age <= end).length
+        });
+      }
+      return bins;
+    }
+
+    function buildLeftRightPairs(timeseriesSummary) {
+      const grouped = d3.group(timeseriesSummary, (d) => `${d.patient_id}|${d.task_name}`);
+      return Array.from(grouped.values())
+        .map((rows) => {
+          const left = rows.find((d) => d.device_location === "LeftWrist");
+          const right = rows.find((d) => d.device_location === "RightWrist");
+          if (!left || !right) return null;
+          return {
+            patient_id: left.patient_id,
+            task_name: left.task_name,
+            patient_group: left.patient_group,
+            left,
+            right
+          };
+        })
+        .filter(Boolean);
+    }
+
+    function classifySeverity(values) {
+      const valid = values.filter((value) => Number.isFinite(value)).sort(d3.ascending);
+      const q1 = d3.quantile(valid, 0.25);
+      const q2 = d3.quantile(valid, 0.5);
+      const q3 = d3.quantile(valid, 0.75);
+      const labels = ["Low", "Moderate", "High", "Very High"];
+      const counts = [0, 0, 0, 0];
+      valid.forEach((value) => {
+        if (value <= q1) counts[0] += 1;
+        else if (value <= q2) counts[1] += 1;
+        else if (value <= q3) counts[2] += 1;
+        else counts[3] += 1;
+      });
+      return { labels, values: counts };
+    }
+
+    function pearson(xs, ys) {
+      const pairs = xs.map((x, i) => [x, ys[i]]).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+      if (pairs.length < 3) return 0;
+      const xVals = pairs.map((d) => d[0]);
+      const yVals = pairs.map((d) => d[1]);
+      const xMean = d3.mean(xVals);
+      const yMean = d3.mean(yVals);
+      const numerator = d3.sum(pairs, ([x, y]) => (x - xMean) * (y - yMean));
+      const xStd = Math.sqrt(d3.sum(xVals, (x) => (x - xMean) ** 2));
+      const yStd = Math.sqrt(d3.sum(yVals, (y) => (y - yMean) ** 2));
+      return xStd && yStd ? numerator / (xStd * yStd) : 0;
+    }
+
+    function uniqueSorted(values) {
+      return Array.from(new Set(values)).sort(d3.ascending);
+    }
+
+    function patientsSortedForSelect(timeseriesSummary, patientMap) {
+      const ids = uniqueSorted(timeseriesSummary.map((d) => d.patient_id));
+      return ids.map((id) => ({
+        patient_id: id,
+        group: patientMap.get(id)?.patient_group || "Unknown"
+      }));
+    }
+
+    function groupColor(group) {
+      if (group === "Parkinson’s Disease") return palette.accent;
+      if (group === "Differential Diagnosis") return palette.gold;
+      return palette.teal;
+    }
+
+    function capitalize(value) {
+      if (!value) return "Unknown";
+      return value.charAt(0).toUpperCase() + value.slice(1);
+    }
+
+    function formatNumber(value, digits = 0) {
+      return Number.isFinite(value) ? value.toFixed(digits) : "N/A";
+    }
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle("error", isError);
+    }
+
+    function baseLayout(overrides = {}) {
+      const {
+        xaxisTitle,
+        yaxisTitle,
+        xaxis: xaxisOverride,
+        yaxis: yaxisOverride,
+        ...rest
+      } = overrides;
+      return {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        margin: { l: 50, r: 24, t: 20, b: 60 },
+        font: { family: "Avenir Next, Segoe UI, sans-serif", color: "#14213d" },
+        legend: { orientation: "h", y: -0.18 },
+        xaxis: {
+          title: xaxisTitle || "",
+          gridcolor: "rgba(20,33,61,0.08)",
+          zerolinecolor: "rgba(20,33,61,0.08)",
+          ...xaxisOverride
+        },
+        yaxis: {
+          title: yaxisTitle || "",
+          gridcolor: "rgba(20,33,61,0.08)",
+          zerolinecolor: "rgba(20,33,61,0.08)",
+          ...yaxisOverride
+        },
+        ...rest
+      };
+    }
+
+    function drawPlot(id, data, layout) {
+      Plotly.newPlot(id, data, layout, { responsive: true, displayModeBar: false });
+    }
+  </script>
+</body>
+</html>
